@@ -10,8 +10,8 @@ export default async function handler(req, res) {
     `${process.env.AIRCALL_API_ID}:${process.env.AIRCALL_API_TOKEN}`
   ).toString("base64");
 
-  const { per_page = 20, from, to, direction } = req.query;
-  const params = new URLSearchParams({ per_page });
+  const { per_page = 50, page = 1, from, to, direction } = req.query;
+  const params = new URLSearchParams({ per_page, page });
   if (from) params.append("from", from);
   if (to) params.append("to", to);
   if (direction && direction !== "all") params.append("direction", direction);
