@@ -1,14 +1,8 @@
+
 const AIRCALL_BASE = "https://api.aircall.io/v1";
 
 export default async function handler(req, res) {
-  const origin = req.headers.origin || "";
-  const allowed = process.env.ALLOWED_ORIGIN || "";
-
-  if (allowed && origin !== allowed) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-
-  res.setHeader("Access-Control-Allow-Origin", allowed || "*");
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
