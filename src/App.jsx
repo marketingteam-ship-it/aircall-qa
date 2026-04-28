@@ -128,6 +128,10 @@ export default function App() {
       const call = calls.find(c=>String(c.id)===String(callId));
       const agent = call?.user?.name||call?.user?.email||"Unknown Agent";
       const text = typeof transcript==="string"?transcript:JSON.stringify(transcript).slice(0,1500);
+if (!text || text.includes("[No transcript") || text.trim().length < 20) {
+  results[callId] = {agent, score:0, sentiment:"Neutral", issues:["No transcript available"], strengths:[], risk_level:"Unknown", summary:"No transcript available for this call."};
+  continue;
+};
       const prompt = `You are a customer service QA analyst. Analyse this call transcript and return ONLY valid JSON (no markdown, no explanation):
 {"agent":"${agent}","score":<0-100>,"sentiment":"Positive|Neutral|Negative","issues":["issue1"],"strengths":["strength1"],"risk_level":"Low|Medium|High","summary":"2 sentence summary"}
 Transcript:\n${text.slice(0,1200)}`;
