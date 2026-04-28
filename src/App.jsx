@@ -112,7 +112,7 @@ export default function App() {
     const results = {};
     for (const c of selected) {
       try {
-        const r = await fetch(`/api/calls/${c.id}/transcription`);
+        const r = await fetch(`/api/transcription?id=${c.id}`);
         const d = await r.json();
         results[c.id] = d.transcription||"[No transcript available]";
       } catch { results[c.id]="[Error fetching transcript]"; }
