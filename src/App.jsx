@@ -45,13 +45,13 @@ function Btn({onClick,disabled,variant="primary",children,style}) {
 }
 
 async function callClaude(prompt) {
-  const res = await fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+  const res = await fetch("/api/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt })
   });
   const d = await res.json();
-  return d.content?.map(b=>b.text||"").join("")||"";
+  return d.text || "";
 }
 
 export default function App() {
