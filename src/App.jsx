@@ -133,7 +133,8 @@ export default function App() {
 Transcript:\n${text.slice(0,1200)}`;
       try {
         const raw = await callClaude(prompt);
-        results[callId] = JSON.parse(raw.replace(/```json|```/g,"").trim());
+const match = raw.match(/\{[\s\S]*\}/);
+results[callId] = JSON.parse(match[0]);
       } catch {
         results[callId]={agent,score:0,sentiment:"Neutral",issues:["Parse error"],strengths:[],risk_level:"Unknown",summary:"Could not analyse."};
       }
