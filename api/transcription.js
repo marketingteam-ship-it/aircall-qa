@@ -1,4 +1,3 @@
-
 const AIRCALL_BASE = "https://api.aircall.io/v1";
 
 export default async function handler(req, res) {
@@ -17,9 +16,22 @@ export default async function handler(req, res) {
     const r = await fetch(`${AIRCALL_BASE}/calls/${id}/transcription`, {
       headers: { Authorization: `Basic ${AUTH}` }
     });
+
+    if (!r.ok) return res.status(200).json({ transcription: "[No transcript available]" });
+
     const data = await r.json();
-    return res.status(r.status).json(data);
+    const utterances = data?.transcription?.content?.utterances || [];
+
+    if (!utterances.length) return res.status(200).json({ transcription: "[No transcript available]" });
+
+    // Convert utterances to readable plain text
+    const text = utterances.map(u => {
+      const speaker = u.participant_type === "internal" ? "Agent" : "Customer";
+      return `${speaker}: ${u.text}`;
+    }).join("\n");
+
+    return res.status(200).json({ transcription: text });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ transcription: "[Error fetching transcript]" });
   }
 }

@@ -132,7 +132,7 @@ export default function App() {
 {"agent":"${agent}","score":<0-100>,"sentiment":"Positive|Neutral|Negative","issues":["issue1"],"strengths":["strength1"],"risk_level":"Low|Medium|High","summary":"2 sentence summary"}
 Transcript:\n${text.slice(0,1200)}`;
       try {
-        const raw = await callClaude(prompt);
+   const raw = await callClaude(prompt);
 const match = raw.match(/\{[\s\S]*\}/);
 results[callId] = JSON.parse(match[0]);
       } catch {
