@@ -1,4 +1,3 @@
-
 const AIRCALL_BASE = "https://api.aircall.io/v1";
 
 export default async function handler(req, res) {
@@ -15,47 +14,60 @@ export default async function handler(req, res) {
   const { phone } = req.query;
   if (!phone) return res.status(400).json({ error: "Missing phone number" });
 
-  // Normalize: strip all non-digits for comparison
+  // Normalize search number — digits only
   const cleanSearch = phone.replace(/\D/g, "");
-  // Also try last 9 digits (local format matching)
-  const localSearch = cleanSearch.slice(-9);
+  // Last 9 digits for local format matching
+  const last9 = cleanSearch.slice(-9);
 
   // Last 6 months
   const from = Math.floor(Date.now() / 1000) - 6 * 30 * 24 * 60 * 60;
 
   try {
-    let allCalls = [];
-    let page = 1;
+    let allMatched = [];
+    let url = `${AIRCALL_BASE}/calls?per_page=50&from=${from}`;
 
-    while (page <= 20) {
-      const params = new URLSearchParams({ per_page: 50, from, page });
-      const r = await fetch(`${AIRCALL_BASE}/calls?${params}`, { headers: HEADERS });
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
       if (!r.ok) break;
       const data = await r.json();
       const calls = data.calls || [];
 
-      const matched = calls.filter(c => {
-        // Check all phone number fields Aircall might use
-        const fields = [
+      for (const c of calls) {
+        // Collect every phone-like field on the call object
+        const candidates = [
           c.raw_digits,
           c.phone_number,
+          c.asset,
           c.contact?.phone_number,
-          c.contact?.direct_link,
-        ].filter(Boolean).map(f => f.replace(/\D/g, ""));
+          c.contact?.information,
+          c.number?.digits,
+          c.number?.name,
+        ]
+          .filter(Boolean)
+          .map(f => String(f).replace(/\D/g, ""))
+          .filter(f => f.length >= 7);
 
-        return fields.some(f =>
+        const matched = candidates.some(f =>
           f === cleanSearch ||
-          f.endsWith(localSearch) ||
+          f.endsWith(last9) ||
           cleanSearch.endsWith(f.slice(-9))
         );
-      });
 
-      allCalls = allCalls.concat(matched);
-      if (calls.length < 50 || !data.meta?.next_page_link) break;
-      page++;
+        if (matched) allMatched.push(c);
+      }
+
+      // Follow next page
+      const nextLink = data.meta?.next_page_link;
+      if (nextLink && calls.length === 50) {
+        const nextUrl = new URL(nextLink);
+        // Keep the from filter on subsequent pages
+        url = `${AIRCALL_BASE}/calls?${nextUrl.searchParams.toString()}`;
+      } else {
+        url = null;
+      }
     }
 
-    return res.status(200).json({ calls: allCalls, total: allCalls.length });
+    return res.status(200).json({ calls: allMatched, total: allMatched.length });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
