@@ -225,14 +225,58 @@ export default function App() {
     if (!customerPhone.trim() || customerPhone === "+61") return;
     setCustomerLoading(true); setCustomerCalls([]); setCustomerTranscripts({});
     setCustomerError(""); setCustomerProgress(0);
+
+    const cleanSearch = customerPhone.replace(/\D/g, "");
+    const last9 = cleanSearch.slice(-9);
+    const from = Math.floor(Date.now() / 1000) - 6 * 30 * 24 * 60 * 60;
+
     try {
-      const r = await fetch(`/api/customer?phone=${encodeURIComponent(customerPhone.trim())}`);
-      setCustomerProgress(60);
-      const d = await r.json();
+      let allMatched = [];
+      let url = `/api/customer?per_page=50&from=${from}`;
+      let totalFetched = 0;
+
+      while (url) {
+        const r = await fetch(url);
+        const d = await r.json();
+        const calls = d.calls || [];
+        totalFetched += calls.length;
+
+        // Match using raw_digits field
+        for (const c of calls) {
+          const rawDigits = (c.raw_digits || "").replace(/\D/g, "");
+          if (
+            rawDigits === cleanSearch ||
+            rawDigits.endsWith(last9) ||
+            cleanSearch.endsWith(rawDigits.slice(-9))
+          ) {
+            allMatched.push(c);
+          }
+        }
+
+        // Update progress based on time range scanned
+        const oldest = calls[calls.length - 1]?.started_at || from;
+        const totalRange = Math.floor(Date.now() / 1000) - from;
+        const scanned = Math.floor(Date.now() / 1000) - oldest;
+        setCustomerProgress(Math.min(99, Math.round((scanned / totalRange) * 100)));
+        setCustomerCalls([...allMatched]); // show results live
+
+        // Stop if oldest call on this page is before our from date
+        if (oldest <= from) { url = null; break; }
+
+        const nextLink = d.meta?.next_page_link;
+        if (nextLink && calls.length === 50) {
+          const nextUrl = new URL(nextLink);
+          url = `/api/customer?${nextUrl.searchParams.toString()}`;
+        } else {
+          url = null;
+        }
+      }
+
       setCustomerProgress(100);
-      if (!d.calls?.length) setCustomerError("No calls found for this number in the last 6 months.");
-      setCustomerCalls(d.calls || []);
-    } catch { setCustomerError("Failed to fetch. Check your connection."); }
+      if (!allMatched.length) setCustomerError("No calls found for this number in the last 6 months.");
+    } catch (e) {
+      setCustomerError("Failed to fetch: " + e.message);
+    }
     setCustomerLoading(false);
   }
 
@@ -475,7 +519,7 @@ export default function App() {
                 {customerLoading ? "Searching…" : "Search"}
               </Btn>
             </div>
-            {customerLoading && <ProgressBar value={customerProgress} label="Searching calls…" />}
+            {customerLoading && <ProgressBar value={customerProgress} label={`Scanning 6 months of calls… (${customerCalls.length} matches found so far)`} />}
             {customerError && <div style={{ fontSize: 12, color: "#A32D2D", marginTop: 8 }}>{customerError}</div>}
           </Card>
 
@@ -498,6 +542,9 @@ export default function App() {
               </div>
               {customerDownloading && <ProgressBar value={customerDownloadProgress} label="Fetching transcripts…" />}
               <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto", marginTop: 8 }}>
+                {customerCalls.length === 0 && customerLoading && (
+                  <p style={{ fontSize: 13, color: "#666" }}>Scanning… results will appear here as they're found.</p>
+                )}
                 {customerCalls.map(c => {
                   const agent = c.user?.name || "Unknown";
                   const date = c.started_at ? new Date(c.started_at * 1000).toLocaleString("en-IN") : "—";
