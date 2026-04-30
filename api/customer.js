@@ -14,9 +14,8 @@ export default async function handler(req, res) {
   const { phone } = req.query;
   if (!phone) return res.status(400).json({ error: "Missing phone number" });
 
-  // Normalize search number — digits only
+  // Strip ALL non-digits for comparison
   const cleanSearch = phone.replace(/\D/g, "");
-  // Last 9 digits for local format matching
   const last9 = cleanSearch.slice(-9);
 
   // Last 6 months
@@ -33,34 +32,22 @@ export default async function handler(req, res) {
       const calls = data.calls || [];
 
       for (const c of calls) {
-        // Collect every phone-like field on the call object
-        const candidates = [
-          c.raw_digits,
-          c.phone_number,
-          c.asset,
-          c.contact?.phone_number,
-          c.contact?.information,
-          c.number?.digits,
-          c.number?.name,
-        ]
-          .filter(Boolean)
-          .map(f => String(f).replace(/\D/g, ""))
-          .filter(f => f.length >= 7);
+        // raw_digits is the customer number e.g. "+61 400 203 798"
+        // Strip spaces/non-digits before comparing
+        const rawDigits = (c.raw_digits || "").replace(/\D/g, "");
 
-        const matched = candidates.some(f =>
-          f === cleanSearch ||
-          f.endsWith(last9) ||
-          cleanSearch.endsWith(f.slice(-9))
-        );
-
-        if (matched) allMatched.push(c);
+        if (
+          rawDigits === cleanSearch ||
+          rawDigits.endsWith(last9) ||
+          cleanSearch.endsWith(rawDigits.slice(-9))
+        ) {
+          allMatched.push(c);
+        }
       }
 
-      // Follow next page
       const nextLink = data.meta?.next_page_link;
       if (nextLink && calls.length === 50) {
         const nextUrl = new URL(nextLink);
-        // Keep the from filter on subsequent pages
         url = `${AIRCALL_BASE}/calls?${nextUrl.searchParams.toString()}`;
       } else {
         url = null;
