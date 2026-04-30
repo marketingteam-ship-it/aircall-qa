@@ -1,3 +1,4 @@
+
 const AIRCALL_BASE = "https://api.aircall.io/v1";
 
 export default async function handler(req, res) {
@@ -9,35 +10,51 @@ export default async function handler(req, res) {
     `${process.env.AIRCALL_API_ID}:${process.env.AIRCALL_API_TOKEN}`
   ).toString("base64");
 
+  const HEADERS = { Authorization: `Basic ${AUTH}` };
+
   const { phone } = req.query;
   if (!phone) return res.status(400).json({ error: "Missing phone number" });
 
-  // Last 6 months from today
+  // Normalize: strip all non-digits for comparison
+  const cleanSearch = phone.replace(/\D/g, "");
+  // Also try last 9 digits (local format matching)
+  const localSearch = cleanSearch.slice(-9);
+
+  // Last 6 months
   const from = Math.floor(Date.now() / 1000) - 6 * 30 * 24 * 60 * 60;
 
   try {
-    // Fetch up to 50 pages to get all calls in 6 months
     let allCalls = [];
     let page = 1;
-    while (true) {
+
+    while (page <= 20) {
       const params = new URLSearchParams({ per_page: 50, from, page });
-      const r = await fetch(`${AIRCALL_BASE}/calls?${params}`, {
-        headers: { Authorization: `Basic ${AUTH}` }
-      });
+      const r = await fetch(`${AIRCALL_BASE}/calls?${params}`, { headers: HEADERS });
+      if (!r.ok) break;
       const data = await r.json();
       const calls = data.calls || [];
-      // Filter by phone number (raw_digits or phone_number fields)
+
       const matched = calls.filter(c => {
-        const raw = c.raw_digits || "";
-        const num = c.phone_number || "";
-        const clean = phone.replace(/\D/g, "");
-        return raw.includes(clean) || num.includes(clean) ||
-               raw.includes(phone) || num.includes(phone);
+        // Check all phone number fields Aircall might use
+        const fields = [
+          c.raw_digits,
+          c.phone_number,
+          c.contact?.phone_number,
+          c.contact?.direct_link,
+        ].filter(Boolean).map(f => f.replace(/\D/g, ""));
+
+        return fields.some(f =>
+          f === cleanSearch ||
+          f.endsWith(localSearch) ||
+          cleanSearch.endsWith(f.slice(-9))
+        );
       });
+
       allCalls = allCalls.concat(matched);
-      if (calls.length < 50 || page >= 20) break; // max 20 pages
+      if (calls.length < 50 || !data.meta?.next_page_link) break;
       page++;
     }
+
     return res.status(200).json({ calls: allCalls, total: allCalls.length });
   } catch (e) {
     return res.status(500).json({ error: e.message });

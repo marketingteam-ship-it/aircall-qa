@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 
 const STEPS = ["Filters", "Select Calls", "Transcripts"];
@@ -145,6 +144,7 @@ export default function App() {
       let allCalls = [];
       let page = 1;
       let hasMore = true;
+      let fetchedCount = 0;
       while (hasMore) {
         let url = `/api/calls?per_page=50&page=${page}`;
         if (filters.dateFrom) url += `&from=${Math.floor(new Date(filters.dateFrom).getTime() / 1000)}`;
@@ -155,13 +155,14 @@ export default function App() {
         const d = await r.json();
         const fetched = d.calls || [];
         allCalls = [...allCalls, ...fetched];
-        const total = d.meta?.total || allCalls.length;
-        setCallsProgress(Math.min(99, Math.round((allCalls.length / Math.max(total, 1)) * 100)));
+        fetchedCount += fetched.length;
+        const total = d.meta?.total || fetchedCount;
+        setCallsProgress(Math.min(99, Math.round((fetchedCount / Math.max(total, 1)) * 100)));
+        setCalls([...allCalls]); // update live so label shows real count
         if (fetched.length < 50 || !d.meta?.next_page_link) { hasMore = false; } else { page++; }
       }
       setCallsProgress(100);
       if (!allCalls.length) showError("No calls found. Try a wider date range.");
-      setCalls(allCalls);
       const sel = {}; allCalls.forEach(c => sel[c.id] = true);
       setSelectedCalls(sel);
     } catch { showError("Failed to fetch calls."); }
@@ -365,7 +366,7 @@ export default function App() {
               <Btn onClick={async () => { await fetchCalls(); setStep(1); }} disabled={loadingCalls}>
                 {loadingCalls ? "Fetching all calls…" : "Fetch calls →"}
               </Btn>
-              {loadingCalls && <ProgressBar value={callsProgress} label={`Fetching calls… (${calls.length} so far)`} />}
+              {loadingCalls && <ProgressBar value={callsProgress} label={`Fetching calls… (${calls.length} fetched so far)`} />}
             </Card>
           )}
 
