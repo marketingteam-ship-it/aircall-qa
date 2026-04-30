@@ -3,7 +3,9 @@ import { useState } from "react";
 
 const STEPS = ["Filters", "Select Calls", "Transcripts"];
 const CALL_TYPES = ["All", "Inbound", "Outbound"];
-const TABS = ["Transcript Downloader", "Customer Lookup"];
+const TABS = ["All Calls for Specific Duration", "All Calls for Specific Number"];
+const USERNAME = "ajay";
+const PASSWORD = "Haha2525@@%%&&";
 
 function today() {
   return new Date().toISOString().split("T")[0];
@@ -11,19 +13,12 @@ function today() {
 
 function Badge({ color, children }) {
   const map = {
-    green: ["#EAF3DE", "#3B6D11"],
-    red: ["#FCEBEB", "#A32D2D"],
-    amber: ["#FAEEDA", "#854F0B"],
-    blue: ["#E6F1FB", "#185FA5"],
-    purple: ["#EEEDFE", "#3C3489"],
-    gray: ["#F1EFE8", "#5F5E5A"],
+    green: ["#EAF3DE", "#3B6D11"], red: ["#FCEBEB", "#A32D2D"],
+    amber: ["#FAEEDA", "#854F0B"], blue: ["#E6F1FB", "#185FA5"],
+    purple: ["#EEEDFE", "#3C3489"], gray: ["#F1EFE8", "#5F5E5A"],
   };
   const [bg, fg] = map[color] || map.blue;
-  return (
-    <span style={{ background: bg, color: fg, fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>
-      {children}
-    </span>
-  );
+  return <span style={{ background: bg, color: fg, fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>{children}</span>;
 }
 
 function StepBar({ current }) {
@@ -45,11 +40,7 @@ function StepBar({ current }) {
 }
 
 function Card({ children, style }) {
-  return (
-    <div style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 12, padding: "1rem 1.25rem", ...style }}>
-      {children}
-    </div>
-  );
+  return <div style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 12, padding: "1rem 1.25rem", ...style }}>{children}</div>;
 }
 
 function Btn({ onClick, disabled, variant = "primary", children, style }) {
@@ -57,23 +48,45 @@ function Btn({ onClick, disabled, variant = "primary", children, style }) {
     primary: { background: "#185FA5", color: "#fff", border: "none" },
     secondary: { background: "transparent", color: "#333", border: "1px solid #ccc" },
     success: { background: "#3B6D11", color: "#fff", border: "none" },
+    danger: { background: "#A32D2D", color: "#fff", border: "none" },
   };
+  return <button onClick={onClick} disabled={disabled} style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, ...s[variant], ...style }}>{children}</button>;
+}
+
+function ProgressBar({ value, label }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, ...s[variant], ...style }}>
-      {children}
-    </button>
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#666", marginBottom: 4 }}>
+        <span>{label}</span><span>{value}%</span>
+      </div>
+      <div style={{ height: 6, background: "#e5e5e5", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${value}%`, background: "#185FA5", borderRadius: 99, transition: "width 0.3s" }} />
+      </div>
+    </div>
   );
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("Transcript Downloader");
+  // — Auth —
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [loginUser, setLoginUser] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [apiStatus, setApiStatus] = useState(null);
+  const [apiChecking, setApiChecking] = useState(false);
 
-  // — Transcript Downloader state —
+  // — Tab —
+  const [activeTab, setActiveTab] = useState(TABS[0]);
+
+  // — Duration tab state —
   const [step, setStep] = useState(0);
   const [filters, setFilters] = useState({ dateFrom: today(), dateTo: today(), callType: "All" });
   const [selectedUser, setSelectedUser] = useState("");
   const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersProgress, setUsersProgress] = useState(0);
   const [calls, setCalls] = useState([]);
+  const [callsProgress, setCallsProgress] = useState(0);
   const [loadingCalls, setLoadingCalls] = useState(false);
   const [selectedCalls, setSelectedCalls] = useState({});
   const [transcripts, setTranscripts] = useState({});
@@ -81,34 +94,53 @@ export default function App() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [error, setError] = useState("");
 
-  // — Customer Lookup state —
-  const [customerPhone, setCustomerPhone] = useState("");
+  // — Number tab state —
+  const [customerPhone, setCustomerPhone] = useState("+61");
   const [customerCalls, setCustomerCalls] = useState([]);
   const [customerTranscripts, setCustomerTranscripts] = useState({});
   const [customerLoading, setCustomerLoading] = useState(false);
+  const [customerProgress, setCustomerProgress] = useState(0);
   const [customerDownloading, setCustomerDownloading] = useState(false);
+  const [customerDownloadProgress, setCustomerDownloadProgress] = useState(0);
   const [customerError, setCustomerError] = useState("");
 
-  function showError(msg) {
-    setError(msg);
-    setTimeout(() => setError(""), 6000);
+  function showError(msg) { setError(msg); setTimeout(() => setError(""), 6000); }
+
+  async function handleLogin() {
+    setLoginError("");
+    if (loginUser.trim() !== USERNAME || loginPass !== PASSWORD) {
+      setLoginError("Incorrect username or password.");
+      return;
+    }
+    setLoggedIn(true);
+    // Auto check API
+    setApiChecking(true);
+    setApiStatus(null);
+    try {
+      const r = await fetch("/api/check");
+      const d = await r.json();
+      setApiStatus(r.ok && d.status === "ok" ? "ok" : "fail");
+    } catch { setApiStatus("fail"); }
+    setApiChecking(false);
+    // Load users in background
+    loadUsers();
   }
 
-  // Fetch users once on first load
   async function loadUsers() {
-    if (users.length > 0) return;
+    setUsersLoading(true);
+    setUsersProgress(30);
     try {
       const r = await fetch("/api/users");
+      setUsersProgress(70);
       const d = await r.json();
       setUsers(d.users || []);
+      setUsersProgress(100);
     } catch { }
+    setUsersLoading(false);
   }
 
   async function fetchCalls() {
-    setLoadingCalls(true);
-    setCalls([]);
-    setError("");
-    await loadUsers();
+    setLoadingCalls(true); setCalls([]); setError(""); setCallsProgress(0);
     try {
       let allCalls = [];
       let page = 1;
@@ -123,27 +155,21 @@ export default function App() {
         const d = await r.json();
         const fetched = d.calls || [];
         allCalls = [...allCalls, ...fetched];
-        if (fetched.length < 50 || !d.meta?.next_page_link) {
-          hasMore = false;
-        } else {
-          page++;
-        }
+        const total = d.meta?.total || allCalls.length;
+        setCallsProgress(Math.min(99, Math.round((allCalls.length / Math.max(total, 1)) * 100)));
+        if (fetched.length < 50 || !d.meta?.next_page_link) { hasMore = false; } else { page++; }
       }
+      setCallsProgress(100);
       if (!allCalls.length) showError("No calls found. Try a wider date range.");
       setCalls(allCalls);
-      const sel = {};
-      allCalls.forEach(c => sel[c.id] = true);
+      const sel = {}; allCalls.forEach(c => sel[c.id] = true);
       setSelectedCalls(sel);
-    } catch {
-      showError("Failed to fetch calls. Check your Vercel deployment.");
-    }
+    } catch { showError("Failed to fetch calls."); }
     setLoadingCalls(false);
   }
 
   async function downloadTranscripts() {
-    setDownloading(true);
-    setError("");
-    setDownloadProgress(0);
+    setDownloading(true); setError(""); setDownloadProgress(0);
     const selected = calls.filter(c => selectedCalls[c.id]);
     const results = {};
     for (let i = 0; i < selected.length; i++) {
@@ -152,9 +178,7 @@ export default function App() {
         const r = await fetch(`/api/transcription?id=${c.id}`);
         const d = await r.json();
         results[c.id] = d.transcription || "[No transcript available]";
-      } catch {
-        results[c.id] = "[Error fetching transcript]";
-      }
+      } catch { results[c.id] = "[Error fetching transcript]"; }
       setDownloadProgress(Math.round(((i + 1) / selected.length) * 100));
     }
     setTranscripts(results);
@@ -173,41 +197,32 @@ export default function App() {
     const blob = new Blob([lines], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = `transcripts-${filters.dateFrom}-to-${filters.dateTo}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = `transcripts-${filters.dateFrom}-to-${filters.dateTo}.txt`;
+    a.click(); URL.revokeObjectURL(url);
   }
 
   function reset() {
-    setStep(0);
-    setCalls([]);
-    setTranscripts({});
-    setSelectedCalls({});
-    setError("");
-    setDownloadProgress(0);
+    setStep(0); setCalls([]); setTranscripts({}); setSelectedCalls({});
+    setError(""); setDownloadProgress(0); setCallsProgress(0);
   }
 
-  // — Customer Lookup functions —
   async function fetchCustomerCalls() {
-    if (!customerPhone.trim()) return;
-    setCustomerLoading(true);
-    setCustomerCalls([]);
-    setCustomerTranscripts({});
-    setCustomerError("");
+    if (!customerPhone.trim() || customerPhone === "+61") return;
+    setCustomerLoading(true); setCustomerCalls([]); setCustomerTranscripts({});
+    setCustomerError(""); setCustomerProgress(0);
     try {
       const r = await fetch(`/api/customer?phone=${encodeURIComponent(customerPhone.trim())}`);
+      setCustomerProgress(60);
       const d = await r.json();
+      setCustomerProgress(100);
       if (!d.calls?.length) setCustomerError("No calls found for this number in the last 6 months.");
       setCustomerCalls(d.calls || []);
-    } catch {
-      setCustomerError("Failed to fetch. Check your connection.");
-    }
+    } catch { setCustomerError("Failed to fetch. Check your connection."); }
     setCustomerLoading(false);
   }
 
   async function downloadCustomerTranscripts() {
-    setCustomerDownloading(true);
+    setCustomerDownloading(true); setCustomerDownloadProgress(0);
     const results = {};
     for (let i = 0; i < customerCalls.length; i++) {
       const c = customerCalls[i];
@@ -215,9 +230,8 @@ export default function App() {
         const r = await fetch(`/api/transcription?id=${c.id}`);
         const d = await r.json();
         results[c.id] = d.transcription || "[No transcript available]";
-      } catch {
-        results[c.id] = "[Error fetching transcript]";
-      }
+      } catch { results[c.id] = "[Error fetching transcript]"; }
+      setCustomerDownloadProgress(Math.round(((i + 1) / customerCalls.length) * 100));
     }
     setCustomerTranscripts(results);
     setCustomerDownloading(false);
@@ -234,115 +248,91 @@ export default function App() {
     const blob = new Blob([`Customer: ${customerPhone}\nExported: ${new Date().toLocaleString("en-IN")}\n\n${lines}`], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = `customer-${customerPhone.replace(/\D/g, "")}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = `customer-${customerPhone.replace(/\D/g, "")}.txt`;
+    a.click(); URL.revokeObjectURL(url);
   }
 
   const selCount = Object.values(selectedCalls).filter(Boolean).length;
   const transcriptCount = Object.keys(transcripts).length;
   const noTranscriptCount = Object.values(transcripts).filter(t => t.includes("[No transcript")).length;
 
+  // ── LOGIN SCREEN ──
+  if (!loggedIn) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f5f7fa", fontFamily: "system-ui,sans-serif" }}>
+        <div style={{ background: "#fff", border: "1px solid #e5e5e5", borderRadius: 16, padding: "2rem 2.5rem", width: "100%", maxWidth: 380, boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div style={{ width: 48, height: 48, background: "#185FA5", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 22 }}>📞</div>
+            <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Aircall Transcripts</h2>
+            <p style={{ fontSize: 13, color: "#666", margin: "4px 0 0" }}>Sign in to continue</p>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Username</label>
+            <input
+              value={loginUser}
+              onChange={e => setLoginUser(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleLogin()}
+              placeholder="Username"
+              autoComplete="username"
+              style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
+            />
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Password</label>
+            <input
+              type="password"
+              value={loginPass}
+              onChange={e => setLoginPass(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleLogin()}
+              placeholder="Password"
+              autoComplete="current-password"
+              style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
+            />
+          </div>
+          {loginError && <div style={{ background: "#FCEBEB", border: "1px solid #E24B4A", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#A32D2D", marginBottom: 14 }}>{loginError}</div>}
+          <button onClick={handleLogin} style={{ width: "100%", padding: "10px", background: "#185FA5", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+            Sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── MAIN APP ──
   return (
     <div style={{ padding: "1.5rem 1rem", maxWidth: 720, margin: "0 auto", fontFamily: "system-ui,sans-serif", color: "#111" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>Aircall Transcript Downloader</h2>
-          <p style={{ fontSize: 13, color: "#666", margin: "4px 0 0" }}>Fetch & download call transcripts from Aircall</p>
+          <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>Aircall Transcripts</h2>
+          <p style={{ fontSize: 13, color: "#666", margin: "4px 0 0" }}>Welcome, {USERNAME}</p>
         </div>
-        <Badge color="blue">Live</Badge>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {apiChecking && <Badge color="amber">Checking API…</Badge>}
+          {!apiChecking && apiStatus === "ok" && <Badge color="green">API Connected ✓</Badge>}
+          {!apiChecking && apiStatus === "fail" && <Badge color="red">API Failed</Badge>}
+          <Btn onClick={() => setLoggedIn(false)} variant="secondary" style={{ fontSize: 12, padding: "5px 12px" }}>Sign out</Btn>
+        </div>
       </div>
 
+      {/* User loading progress */}
+      {usersLoading && <ProgressBar value={usersProgress} label="Loading agent list…" />}
+
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid #e5e5e5" }}>
+      <div style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid #e5e5e5" }}>
         {TABS.map(t => (
-          <button key={t} onClick={() => setActiveTab(t)} style={{ padding: "8px 18px", fontSize: 13, fontWeight: 500, cursor: "pointer", background: "none", border: "none", borderBottom: activeTab === t ? "2px solid #185FA5" : "2px solid transparent", color: activeTab === t ? "#185FA5" : "#666", marginBottom: -1 }}>
+          <button key={t} onClick={() => setActiveTab(t)} style={{ padding: "8px 14px", fontSize: 12, fontWeight: 500, cursor: "pointer", background: "none", border: "none", borderBottom: activeTab === t ? "2px solid #185FA5" : "2px solid transparent", color: activeTab === t ? "#185FA5" : "#666", marginBottom: -1 }}>
             {t}
           </button>
         ))}
       </div>
 
-      {/* ── CUSTOMER LOOKUP TAB ── */}
-      {activeTab === "Customer Lookup" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <Card>
-            <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Customer transcript lookup</h3>
-            <p style={{ fontSize: 13, color: "#666", marginBottom: 14 }}>Enter a customer's phone number to fetch all call transcripts from the last 6 months.</p>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <input
-                value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && fetchCustomerCalls()}
-                placeholder="+91 98765 43210"
-                style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
-              />
-              <Btn onClick={fetchCustomerCalls} disabled={customerLoading || !customerPhone.trim()}>
-                {customerLoading ? "Searching…" : "Search"}
-              </Btn>
-            </div>
-            {customerError && <div style={{ fontSize: 12, color: "#A32D2D", marginTop: 4 }}>{customerError}</div>}
-          </Card>
-
-          {customerCalls.length > 0 && (
-            <Card>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-                <div>
-                  <span style={{ fontSize: 14, fontWeight: 500 }}>{customerCalls.length} calls found</span>
-                  <span style={{ fontSize: 12, color: "#666", marginLeft: 8 }}>for {customerPhone}</span>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {Object.keys(customerTranscripts).length === 0 && !customerDownloading && (
-                    <Btn onClick={downloadCustomerTranscripts} variant="secondary">Fetch transcripts</Btn>
-                  )}
-                  {customerDownloading && <span style={{ fontSize: 12, color: "#666", padding: "8px 0" }}>Downloading…</span>}
-                  {Object.keys(customerTranscripts).length > 0 && (
-                    <Btn onClick={downloadCustomerAsFile} variant="success">⬇ Download .txt</Btn>
-                  )}
-                </div>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto" }}>
-                {customerCalls.map(c => {
-                  const agent = c.user?.name || "Unknown";
-                  const date = c.started_at ? new Date(c.started_at * 1000).toLocaleString("en-IN") : "—";
-                  const dur = c.duration ? `${Math.floor(c.duration / 60)}m ${c.duration % 60}s` : "—";
-                  const transcript = customerTranscripts[c.id];
-                  return (
-                    <div key={c.id} style={{ borderRadius: 8, border: "1px solid #e5e5e5", overflow: "hidden" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "#fafafa" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>{agent}</div>
-                          <div style={{ fontSize: 11, color: "#666" }}>{date} · {dur}</div>
-                        </div>
-                        <Badge color={c.direction === "inbound" ? "blue" : "purple"}>{c.direction || "call"}</Badge>
-                        {transcript && <Badge color="green">Ready</Badge>}
-                      </div>
-                      {transcript && (
-                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#444", lineHeight: 1.6, background: "#fff", borderTop: "1px solid #f0f0f0", maxHeight: 120, overflowY: "auto", whiteSpace: "pre-wrap" }}>
-                          {typeof transcript === "string" ? transcript : JSON.stringify(transcript)}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* ── TRANSCRIPT DOWNLOADER TAB ── */}
-      {activeTab === "Transcript Downloader" && (
+      {/* ── TAB 1: All Calls for Specific Duration ── */}
+      {activeTab === TABS[0] && (
         <>
-          {error && (
-            <div style={{ background: "#FCEBEB", border: "1px solid #E24B4A", borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: "#A32D2D" }}>
-              {error}
-            </div>
-          )}
-
+          {error && <div style={{ background: "#FCEBEB", border: "1px solid #E24B4A", borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: "#A32D2D" }}>{error}</div>}
           <StepBar current={step} />
 
-          {/* STEP 0 — Filters */}
           {step === 0 && (
             <Card>
               <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 16 }}>Step 1 — Date range, call type & agent</h3>
@@ -368,20 +358,17 @@ export default function App() {
                 <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 6 }}>Filter by agent <span style={{ color: "#aaa" }}>(optional)</span></label>
                 <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid #ccc", fontSize: 13, background: "#fff" }}>
                   <option value="">All agents</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.name}{u.email ? ` (${u.email})` : ""}</option>
-                  ))}
+                  {users.map(u => <option key={u.id} value={u.id}>{u.name}{u.email ? ` (${u.email})` : ""}</option>)}
                 </select>
-                {users.length === 0 && <p style={{ fontSize: 11, color: "#aaa", margin: "4px 0 0" }}>Agent list loads when you fetch calls.</p>}
+                {usersLoading && <p style={{ fontSize: 11, color: "#aaa", margin: "4px 0 0" }}>Loading agents…</p>}
               </div>
               <Btn onClick={async () => { await fetchCalls(); setStep(1); }} disabled={loadingCalls}>
                 {loadingCalls ? "Fetching all calls…" : "Fetch calls →"}
               </Btn>
-              {loadingCalls && <p style={{ fontSize: 12, color: "#666", marginTop: 8 }}>Fetching all pages, please wait…</p>}
+              {loadingCalls && <ProgressBar value={callsProgress} label={`Fetching calls… (${calls.length} so far)`} />}
             </Card>
           )}
 
-          {/* STEP 1 — Select calls */}
           {step === 1 && (
             <Card>
               <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>Step 2 — Select calls</h3>
@@ -391,7 +378,6 @@ export default function App() {
                 <button onClick={() => setSelectedCalls({})} style={{ fontSize: 11, color: "#666", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Deselect all</button>
               </div>
               <div style={{ maxHeight: 380, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
-                {calls.length === 0 && <p style={{ fontSize: 13, color: "#666" }}>No calls found.</p>}
                 {calls.map(c => {
                   const agent = c.user?.name || c.user?.email || `Agent ${c.id}`;
                   const dur = c.duration ? `${Math.floor(c.duration / 60)}m ${c.duration % 60}s` : "—";
@@ -414,10 +400,10 @@ export default function App() {
                   {downloading ? `Downloading… ${downloadProgress}%` : `Download transcripts (${selCount}) →`}
                 </Btn>
               </div>
+              {downloading && <ProgressBar value={downloadProgress} label="Fetching transcripts…" />}
             </Card>
           )}
 
-          {/* STEP 2 — Transcripts */}
           {step === 2 && (
             <Card>
               <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Step 3 — Transcripts</h3>
@@ -426,9 +412,7 @@ export default function App() {
                 {noTranscriptCount > 0 && <Badge color="amber">{noTranscriptCount} no transcript</Badge>}
                 <Badge color="blue">{transcriptCount} total</Badge>
               </div>
-              <Btn onClick={downloadAllAsFile} variant="success" style={{ marginBottom: 16 }}>
-                ⬇ Download all as .txt file
-              </Btn>
+              <Btn onClick={downloadAllAsFile} variant="success" style={{ marginBottom: 16 }}>⬇ Download all as .txt</Btn>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto" }}>
                 {calls.filter(c => selectedCalls[c.id]).map(c => {
                   const agent = c.user?.name || c.user?.email || `Agent ${c.id}`;
@@ -452,6 +436,81 @@ export default function App() {
             </Card>
           )}
         </>
+      )}
+
+      {/* ── TAB 2: All Calls for Specific Number ── */}
+      {activeTab === TABS[1] && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <Card>
+            <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Search by customer number</h3>
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 14 }}>Enter a customer's phone number to fetch all call transcripts from the last 6 months.</p>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <input
+                value={customerPhone}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (!val.startsWith("+61")) setCustomerPhone("+61");
+                  else setCustomerPhone(val);
+                }}
+                onKeyDown={e => e.key === "Enter" && fetchCustomerCalls()}
+                placeholder="+61 4XX XXX XXX"
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
+              />
+              <Btn onClick={fetchCustomerCalls} disabled={customerLoading || customerPhone === "+61" || customerPhone.trim().length < 5}>
+                {customerLoading ? "Searching…" : "Search"}
+              </Btn>
+            </div>
+            {customerLoading && <ProgressBar value={customerProgress} label="Searching calls…" />}
+            {customerError && <div style={{ fontSize: 12, color: "#A32D2D", marginTop: 8 }}>{customerError}</div>}
+          </Card>
+
+          {customerCalls.length > 0 && (
+            <Card>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                <div>
+                  <span style={{ fontSize: 14, fontWeight: 500 }}>{customerCalls.length} calls found</span>
+                  <span style={{ fontSize: 12, color: "#666", marginLeft: 8 }}>for {customerPhone}</span>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {Object.keys(customerTranscripts).length === 0 && !customerDownloading && (
+                    <Btn onClick={downloadCustomerTranscripts} variant="secondary">Fetch transcripts</Btn>
+                  )}
+                  {customerDownloading && <span style={{ fontSize: 12, color: "#666" }}>Downloading…</span>}
+                  {Object.keys(customerTranscripts).length > 0 && (
+                    <Btn onClick={downloadCustomerAsFile} variant="success">⬇ Download all as .txt</Btn>
+                  )}
+                </div>
+              </div>
+              {customerDownloading && <ProgressBar value={customerDownloadProgress} label="Fetching transcripts…" />}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto", marginTop: 8 }}>
+                {customerCalls.map(c => {
+                  const agent = c.user?.name || "Unknown";
+                  const date = c.started_at ? new Date(c.started_at * 1000).toLocaleString("en-IN") : "—";
+                  const dur = c.duration ? `${Math.floor(c.duration / 60)}m ${c.duration % 60}s` : "—";
+                  const transcript = customerTranscripts[c.id];
+                  const hasT = transcript && !transcript.includes("[No transcript") && !transcript.includes("[Error");
+                  return (
+                    <div key={c.id} style={{ borderRadius: 8, border: "1px solid #e5e5e5", overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "#fafafa" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{agent}</div>
+                          <div style={{ fontSize: 11, color: "#666" }}>{date} · {dur}</div>
+                        </div>
+                        <Badge color={c.direction === "inbound" ? "blue" : "purple"}>{c.direction || "call"}</Badge>
+                        {transcript && <Badge color={hasT ? "green" : "amber"}>{hasT ? "Ready" : "No transcript"}</Badge>}
+                      </div>
+                      {hasT && (
+                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#444", lineHeight: 1.6, background: "#fff", borderTop: "1px solid #f0f0f0", maxHeight: 120, overflowY: "auto", whiteSpace: "pre-wrap" }}>
+                          {transcript.slice(0, 300)}…
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );
