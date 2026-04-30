@@ -233,15 +233,15 @@ export default function App() {
     try {
       let allMatched = [];
       let url = `/api/customer?per_page=50&from=${from}`;
-      let totalFetched = 0;
+      let pageCount = 0;
+      const MAX_PAGES = 100; // 6 months safety cap
 
       while (url) {
         const r = await fetch(url);
         const d = await r.json();
         const calls = d.calls || [];
-        totalFetched += calls.length;
+        pageCount++;
 
-        // Match using raw_digits field
         for (const c of calls) {
           const rawDigits = (c.raw_digits || "").replace(/\D/g, "");
           if (
@@ -253,15 +253,20 @@ export default function App() {
           }
         }
 
-        // Update progress based on time range scanned
-        const oldest = calls[calls.length - 1]?.started_at || from;
-        const totalRange = Math.floor(Date.now() / 1000) - from;
-        const scanned = Math.floor(Date.now() / 1000) - oldest;
-        setCustomerProgress(Math.min(99, Math.round((scanned / totalRange) * 100)));
-        setCustomerCalls([...allMatched]); // show results live
+        // Progress based on oldest call timestamp on this page vs 6 month window
+        const oldest = calls[calls.length - 1]?.started_at;
+        if (oldest) {
+          const totalRange = Math.floor(Date.now() / 1000) - from;
+          const scanned = Math.floor(Date.now() / 1000) - oldest;
+          // Always increase, never go backwards
+          const newProgress = Math.min(99, Math.round((scanned / totalRange) * 100));
+          setCustomerProgress(p => Math.max(p, newProgress));
+        }
+
+        setCustomerCalls([...allMatched]);
 
         const nextLink = d.meta?.next_page_link;
-        if (nextLink && calls.length === 50) {
+        if (nextLink && calls.length === 50 && pageCount < MAX_PAGES) {
           const nextUrl = new URL(nextLink);
           url = `/api/customer?${nextUrl.searchParams.toString()}`;
         } else {
@@ -521,7 +526,7 @@ export default function App() {
           </Card>
 
           {customerCalls.length > 0 && (
-            <Card>
+            <Card style={{ overflow: "visible" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
                 <div>
                   <span style={{ fontSize: 14, fontWeight: 500 }}>{customerCalls.length} calls found</span>
@@ -559,7 +564,7 @@ export default function App() {
                         {transcript && <Badge color={hasT ? "green" : "amber"}>{hasT ? "Ready" : "No transcript"}</Badge>}
                       </div>
                       {hasT && (
-                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#444", lineHeight: 1.6, background: "#fff", borderTop: "1px solid #f0f0f0", maxHeight: 120, overflowY: "auto", whiteSpace: "pre-wrap" }}>
+                        <div style={{ padding: "10px 12px", fontSize: 12, color: "#444", lineHeight: 1.6, background: "#fff", borderTop: "1px solid #f0f0f0", whiteSpace: "pre-wrap" }}>
                           {transcript.slice(0, 300)}…
                         </div>
                       )}
