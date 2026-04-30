@@ -304,9 +304,9 @@ export default function App() {
       const agent = c.user?.name || "Unknown";
       const dur = c.duration ? `${Math.floor(c.duration / 60)}m ${c.duration % 60}s` : "—";
       const transcript = customerTranscripts[c.id] || "No transcript";
-      return `==============================\nDate: ${date}\nAgent: ${agent}\nDuration: ${dur}\nDirection: ${c.direction || "—"}\n------------------------------\n${transcript}\n`;
+      return `==============================\nDate: ${date}\nCustomer: ${customerPhone}\nAgent: ${agent}\nDuration: ${dur}\nDirection: ${c.direction || "—"}\n------------------------------\n${transcript}\n`;
     }).join("\n");
-    const blob = new Blob([`Customer: ${customerPhone}\nExported: ${new Date().toLocaleString("en-IN")}\n\n${lines}`], { type: "text/plain" });
+    const blob = new Blob([`Customer Phone: ${customerPhone}\nTotal Calls: ${customerCalls.length}\nExported: ${new Date().toLocaleString("en-IN")}\n${"═".repeat(60)}\n\n${lines}`], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = `customer-${customerPhone.replace(/\D/g, "")}.txt`;
