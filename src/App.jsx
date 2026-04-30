@@ -538,7 +538,7 @@ export default function App() {
                 </div>
               </div>
               {customerDownloading && <ProgressBar value={customerDownloadProgress} label="Fetching transcripts…" />}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto", marginTop: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                 {customerCalls.length === 0 && customerLoading && (
                   <p style={{ fontSize: 13, color: "#666" }}>Scanning… results will appear here as they're found.</p>
                 )}
