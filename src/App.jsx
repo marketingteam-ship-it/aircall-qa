@@ -260,9 +260,6 @@ export default function App() {
         setCustomerProgress(Math.min(99, Math.round((scanned / totalRange) * 100)));
         setCustomerCalls([...allMatched]); // show results live
 
-        // Stop if oldest call on this page is before our from date
-        if (oldest <= from) { url = null; break; }
-
         const nextLink = d.meta?.next_page_link;
         if (nextLink && calls.length === 50) {
           const nextUrl = new URL(nextLink);
