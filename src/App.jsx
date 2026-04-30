@@ -144,12 +144,10 @@ export default function App() {
       let allCalls = [];
       let fetchedCount = 0;
 
-      // Build initial URL with date/type/user filters
       let url = `/api/calls?per_page=50`;
       if (filters.dateFrom) url += `&from=${Math.floor(new Date(filters.dateFrom).getTime() / 1000)}`;
       if (filters.dateTo) url += `&to=${Math.floor(new Date(filters.dateTo + "T23:59:59").getTime() / 1000)}`;
       if (filters.callType !== "All") url += `&direction=${filters.callType.toLowerCase()}`;
-      if (selectedUser) url += `&user_id=${selectedUser}`;
 
       while (url) {
         const r = await fetch(url);
@@ -162,19 +160,23 @@ export default function App() {
         setCallsProgress(Math.min(99, Math.round((fetchedCount / Math.max(total, 1)) * 100)));
         setCalls([...allCalls]);
 
-        // Use Aircall's next_page_link — but route it through our proxy
         const nextLink = d.meta?.next_page_link;
         if (nextLink && fetched.length === 50) {
-          // Extract query params from next_page_link and rebuild our proxy URL
           const nextUrl = new URL(nextLink);
           url = `/api/calls?${nextUrl.searchParams.toString()}`;
         } else {
-          url = null; // no more pages
+          url = null;
         }
       }
 
+      // Filter by user client-side since Aircall ignores user_id param
+      if (selectedUser) {
+        allCalls = allCalls.filter(c => String(c.user?.id) === String(selectedUser));
+      }
+
       setCallsProgress(100);
-      if (!allCalls.length) showError("No calls found. Try a wider date range.");
+      if (!allCalls.length) showError("No calls found. Try a wider date range or different agent.");
+      setCalls(allCalls);
       const sel = {}; allCalls.forEach(c => sel[c.id] = true);
       setSelectedCalls(sel);
     } catch (e) { showError("Failed to fetch calls: " + e.message); }
@@ -378,7 +380,7 @@ export default function App() {
               <Btn onClick={async () => { await fetchCalls(); setStep(1); }} disabled={loadingCalls}>
                 {loadingCalls ? "Fetching all calls…" : "Fetch calls →"}
               </Btn>
-              {loadingCalls && <ProgressBar value={callsProgress} label={`Fetching calls… (${calls.length} fetched so far)`} />}
+              {loadingCalls && <ProgressBar value={callsProgress} label={`Fetching all calls… (${calls.length} fetched, filtering by agent after)`} />}
             </Card>
           )}
 
