@@ -9,17 +9,12 @@ export default async function handler(req, res) {
     `${process.env.AIRCALL_API_ID}:${process.env.AIRCALL_API_TOKEN}`
   ).toString("base64");
 
-  const { per_page = 20, from, to, direction, user_id } = req.query;
-  const params = new URLSearchParams({ per_page });
-  if (from) params.append("from", from);
-  if (to) params.append("to", to);
-  if (direction && direction !== "all") params.append("direction", direction);
-  if (user_id) params.append("user_id", user_id);
+  // Forward ALL query params directly to Aircall as-is
+  const params = new URLSearchParams(req.query).toString();
+  const url = `${AIRCALL_BASE}/calls?${params}`;
 
   try {
-    const r = await fetch(`${AIRCALL_BASE}/calls?${params}`, {
-      headers: { Authorization: `Basic ${AUTH}` }
-    });
+    const r = await fetch(url, { headers: { Authorization: `Basic ${AUTH}` } });
     const data = await r.json();
     return res.status(r.status).json(data);
   } catch (e) {

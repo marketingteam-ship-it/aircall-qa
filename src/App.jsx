@@ -142,30 +142,42 @@ export default function App() {
     setLoadingCalls(true); setCalls([]); setError(""); setCallsProgress(0);
     try {
       let allCalls = [];
-      let page = 1;
-      let hasMore = true;
       let fetchedCount = 0;
-      while (hasMore) {
-        let url = `/api/calls?per_page=50&page=${page}`;
-        if (filters.dateFrom) url += `&from=${Math.floor(new Date(filters.dateFrom).getTime() / 1000)}`;
-        if (filters.dateTo) url += `&to=${Math.floor(new Date(filters.dateTo + "T23:59:59").getTime() / 1000)}`;
-        if (filters.callType !== "All") url += `&direction=${filters.callType.toLowerCase()}`;
-        if (selectedUser) url += `&user_id=${selectedUser}`;
+
+      // Build initial URL with date/type/user filters
+      let url = `/api/calls?per_page=50`;
+      if (filters.dateFrom) url += `&from=${Math.floor(new Date(filters.dateFrom).getTime() / 1000)}`;
+      if (filters.dateTo) url += `&to=${Math.floor(new Date(filters.dateTo + "T23:59:59").getTime() / 1000)}`;
+      if (filters.callType !== "All") url += `&direction=${filters.callType.toLowerCase()}`;
+      if (selectedUser) url += `&user_id=${selectedUser}`;
+
+      while (url) {
         const r = await fetch(url);
         const d = await r.json();
         const fetched = d.calls || [];
         allCalls = [...allCalls, ...fetched];
         fetchedCount += fetched.length;
+
         const total = d.meta?.total || fetchedCount;
         setCallsProgress(Math.min(99, Math.round((fetchedCount / Math.max(total, 1)) * 100)));
-        setCalls([...allCalls]); // update live so label shows real count
-        if (fetched.length < 50 || !d.meta?.next_page_link) { hasMore = false; } else { page++; }
+        setCalls([...allCalls]);
+
+        // Use Aircall's next_page_link — but route it through our proxy
+        const nextLink = d.meta?.next_page_link;
+        if (nextLink && fetched.length === 50) {
+          // Extract query params from next_page_link and rebuild our proxy URL
+          const nextUrl = new URL(nextLink);
+          url = `/api/calls?${nextUrl.searchParams.toString()}`;
+        } else {
+          url = null; // no more pages
+        }
       }
+
       setCallsProgress(100);
       if (!allCalls.length) showError("No calls found. Try a wider date range.");
       const sel = {}; allCalls.forEach(c => sel[c.id] = true);
       setSelectedCalls(sel);
-    } catch { showError("Failed to fetch calls."); }
+    } catch (e) { showError("Failed to fetch calls: " + e.message); }
     setLoadingCalls(false);
   }
 
