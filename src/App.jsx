@@ -207,7 +207,8 @@ export default function App() {
       const date = c.started_at ? new Date(c.started_at * 1000).toLocaleDateString("en-IN") : "—";
       const dur = c.duration ? `${Math.floor(c.duration / 60)}m ${c.duration % 60}s` : "—";
       const text = transcripts[c.id] || "[No transcript]";
-      return `==============================\nCall ID: ${c.id}\nAgent: ${agent}\nDate: ${date}\nDuration: ${dur}\nDirection: ${c.direction || "—"}\n------------------------------\n${text}\n`;
+      const customerNum = c.raw_digits || "—";
+      return `==============================\nCall ID: ${c.id}\nAgent: ${agent}\nCustomer Number: ${customerNum}\nDate: ${date}\nDuration: ${dur}\nDirection: ${c.direction || "—"}\n------------------------------\n${text}\n`;
     }).join("\n");
     const blob = new Blob([lines], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
