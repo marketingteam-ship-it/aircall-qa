@@ -4,7 +4,7 @@ const STEPS = ["Filters", "Select Calls", "Transcripts"];
 const CALL_TYPES = ["All", "Inbound", "Outbound"];
 const TABS = ["All Calls for Specific Duration", "All Calls for Specific Number"];
 const USERNAME = "ajay";
-const PASSWORD = "Haha2525@@%%&&";
+const PASSWORD = "Amazing@Vadodara390007";
 
 function today() {
   return new Date().toISOString().split("T")[0];
