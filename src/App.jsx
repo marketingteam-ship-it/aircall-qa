@@ -143,6 +143,7 @@ export default function App() {
     try {
       let allCalls = [];
       let fetchedCount = 0;
+      let totalKnown = 0;
 
       let url = `/api/calls?per_page=50`;
       if (filters.dateFrom) url += `&from=${Math.floor(new Date(filters.dateFrom).getTime() / 1000)}`;
@@ -153,13 +154,17 @@ export default function App() {
         const r = await fetch(url);
         const d = await r.json();
         const fetched = d.calls || [];
+        if (!fetched.length) break;
         allCalls = [...allCalls, ...fetched];
         fetchedCount += fetched.length;
 
-        const total = d.meta?.total || fetchedCount;
-        setCallsProgress(Math.min(99, Math.round((fetchedCount / Math.max(total, 1)) * 100)));
+        // Use total from meta if available, otherwise keep growing
+        if (d.meta?.total) totalKnown = d.meta.total;
+        const total = totalKnown || fetchedCount + (fetched.length === 50 ? 50 : 0);
+        setCallsProgress(Math.min(95, Math.round((fetchedCount / Math.max(total, 1)) * 100)));
         setCalls([...allCalls]);
 
+        // Only stop when Aircall says there's no next page OR we get less than 50
         const nextLink = d.meta?.next_page_link;
         if (nextLink && fetched.length === 50) {
           const nextUrl = new URL(nextLink);
@@ -234,14 +239,15 @@ export default function App() {
     try {
       let allMatched = [];
       let url = `/api/customer?per_page=50&from=${from}`;
-      let pageCount = 0;
-      const MAX_PAGES = 100; // 6 months safety cap
+      let totalScanned = 0;
+      let totalKnown = 0;
 
       while (url) {
         const r = await fetch(url);
         const d = await r.json();
         const calls = d.calls || [];
-        pageCount++;
+        if (!calls.length) break;
+        totalScanned += calls.length;
 
         for (const c of calls) {
           const rawDigits = (c.raw_digits || "").replace(/\D/g, "");
@@ -254,20 +260,23 @@ export default function App() {
           }
         }
 
-        // Progress based on oldest call timestamp on this page vs 6 month window
-        const oldest = calls[calls.length - 1]?.started_at;
-        if (oldest) {
-          const totalRange = Math.floor(Date.now() / 1000) - from;
-          const scanned = Math.floor(Date.now() / 1000) - oldest;
-          // Always increase, never go backwards
-          const newProgress = Math.min(99, Math.round((scanned / totalRange) * 100));
-          setCustomerProgress(p => Math.max(p, newProgress));
+        // Progress: use meta total if available, otherwise estimate from time range
+        if (d.meta?.total) totalKnown = d.meta.total;
+        if (totalKnown) {
+          setCustomerProgress(Math.min(95, Math.round((totalScanned / totalKnown) * 100)));
+        } else {
+          // fallback: estimate by oldest timestamp
+          const oldest = calls[calls.length - 1]?.started_at;
+          if (oldest) {
+            const totalRange = Math.floor(Date.now() / 1000) - from;
+            const scanned = Math.floor(Date.now() / 1000) - oldest;
+            setCustomerProgress(p => Math.max(p, Math.min(95, Math.round((scanned / totalRange) * 100))));
+          }
         }
-
         setCustomerCalls([...allMatched]);
 
         const nextLink = d.meta?.next_page_link;
-        if (nextLink && calls.length === 50 && pageCount < MAX_PAGES) {
+        if (nextLink && calls.length === 50) {
           const nextUrl = new URL(nextLink);
           url = `/api/customer?${nextUrl.searchParams.toString()}`;
         } else {
@@ -522,7 +531,7 @@ export default function App() {
                 {customerLoading ? "Searching…" : "Search"}
               </Btn>
             </div>
-            {customerLoading && <ProgressBar value={customerProgress} label={`Scanning 6 months of calls… (${customerCalls.length} matches found so far)`} />}
+            {customerLoading && <ProgressBar value={customerProgress} label={`Scanning calls… (${customerCalls.length} matches found, still scanning)`} />}
             {customerError && <div style={{ fontSize: 12, color: "#A32D2D", marginTop: 8 }}>{customerError}</div>}
           </Card>
 
