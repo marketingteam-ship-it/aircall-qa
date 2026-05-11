@@ -234,11 +234,12 @@ export default function App() {
 
     const cleanSearch = customerPhone.replace(/\D/g, "");
     const last9 = cleanSearch.slice(-9);
-    const from = Math.floor(Date.now() / 1000) - 6 * 30 * 24 * 60 * 60;
+    const from = Math.floor(new Date(customerDateFrom).getTime() / 1000);
+    const to = Math.floor(new Date(customerDateTo + "T23:59:59").getTime() / 1000);
 
     try {
       let allMatched = [];
-      let url = `/api/customer?per_page=50&from=${from}`;
+      let url = `/api/customer?per_page=50&from=${from}&to=${to}`;
       let totalScanned = 0;
       let totalKnown = 0;
 
@@ -514,7 +515,17 @@ export default function App() {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Card>
             <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Search by customer number</h3>
-            <p style={{ fontSize: 13, color: "#666", marginBottom: 14 }}>Enter a customer's phone number to fetch all call transcripts from the last 6 months.</p>
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 14 }}>Enter a customer's phone number and date range to find all their calls.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>From date</label>
+                <input type="date" value={customerDateFrom} onChange={e => setCustomerDateFrom(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "7px 10px", borderRadius: 7, border: "1px solid #ccc", fontSize: 13 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>To date</label>
+                <input type="date" value={customerDateTo} onChange={e => setCustomerDateTo(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "7px 10px", borderRadius: 7, border: "1px solid #ccc", fontSize: 13 }} />
+              </div>
+            </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <input
                 value={customerPhone}
