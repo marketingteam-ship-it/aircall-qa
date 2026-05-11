@@ -10,6 +10,12 @@ function today() {
   return new Date().toISOString().split("T")[0];
 }
 
+function oneMonthAgo() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return d.toISOString().split("T")[0];
+}
+
 function Badge({ color, children }) {
   const map = {
     green: ["#EAF3DE", "#3B6D11"], red: ["#FCEBEB", "#A32D2D"],
@@ -47,7 +53,6 @@ function Btn({ onClick, disabled, variant = "primary", children, style }) {
     primary: { background: "#185FA5", color: "#fff", border: "none" },
     secondary: { background: "transparent", color: "#333", border: "1px solid #ccc" },
     success: { background: "#3B6D11", color: "#fff", border: "none" },
-    danger: { background: "#A32D2D", color: "#fff", border: "none" },
   };
   return <button onClick={onClick} disabled={disabled} style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, ...s[variant], ...style }}>{children}</button>;
 }
@@ -66,7 +71,7 @@ function ProgressBar({ value, label }) {
 }
 
 export default function App() {
-  // — Auth —
+  // Auth
   const [loggedIn, setLoggedIn] = useState(false);
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
@@ -74,16 +79,15 @@ export default function App() {
   const [apiStatus, setApiStatus] = useState(null);
   const [apiChecking, setApiChecking] = useState(false);
 
-  // — Tab —
+  // Tab
   const [activeTab, setActiveTab] = useState(TABS[0]);
 
-  // — Duration tab state —
+  // Duration tab
   const [step, setStep] = useState(0);
   const [filters, setFilters] = useState({ dateFrom: today(), dateTo: today(), callType: "All" });
   const [selectedUser, setSelectedUser] = useState("");
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
-  const [usersProgress, setUsersProgress] = useState(0);
   const [calls, setCalls] = useState([]);
   const [callsProgress, setCallsProgress] = useState(0);
   const [loadingCalls, setLoadingCalls] = useState(false);
@@ -93,8 +97,10 @@ export default function App() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [error, setError] = useState("");
 
-  // — Number tab state —
+  // Customer tab
   const [customerPhone, setCustomerPhone] = useState("+61");
+  const [customerDateFrom, setCustomerDateFrom] = useState(oneMonthAgo);
+  const [customerDateTo, setCustomerDateTo] = useState(today);
   const [customerCalls, setCustomerCalls] = useState([]);
   const [customerTranscripts, setCustomerTranscripts] = useState({});
   const [customerLoading, setCustomerLoading] = useState(false);
@@ -112,28 +118,22 @@ export default function App() {
       return;
     }
     setLoggedIn(true);
-    // Auto check API
-    setApiChecking(true);
-    setApiStatus(null);
+    setApiChecking(true); setApiStatus(null);
     try {
       const r = await fetch("/api/check");
       const d = await r.json();
       setApiStatus(r.ok && d.status === "ok" ? "ok" : "fail");
     } catch { setApiStatus("fail"); }
     setApiChecking(false);
-    // Load users in background
     loadUsers();
   }
 
   async function loadUsers() {
     setUsersLoading(true);
-    setUsersProgress(30);
     try {
       const r = await fetch("/api/users");
-      setUsersProgress(70);
       const d = await r.json();
       setUsers(d.users || []);
-      setUsersProgress(100);
     } catch { }
     setUsersLoading(false);
   }
@@ -158,13 +158,11 @@ export default function App() {
         allCalls = [...allCalls, ...fetched];
         fetchedCount += fetched.length;
 
-        // Use total from meta if available, otherwise keep growing
         if (d.meta?.total) totalKnown = d.meta.total;
         const total = totalKnown || fetchedCount + (fetched.length === 50 ? 50 : 0);
         setCallsProgress(Math.min(95, Math.round((fetchedCount / Math.max(total, 1)) * 100)));
         setCalls([...allCalls]);
 
-        // Only stop when Aircall says there's no next page OR we get less than 50
         const nextLink = d.meta?.next_page_link;
         if (nextLink && fetched.length === 50) {
           const nextUrl = new URL(nextLink);
@@ -174,16 +172,17 @@ export default function App() {
         }
       }
 
-      // Filter by user client-side since Aircall ignores user_id param
-      if (selectedUser) {
-        allCalls = allCalls.filter(c => String(c.user?.id) === String(selectedUser));
-      }
-
       setCallsProgress(100);
-      if (!allCalls.length) showError("No calls found. Try a wider date range or different agent.");
-      setCalls(allCalls);
-      const sel = {}; allCalls.forEach(c => sel[c.id] = true);
-      setSelectedCalls(sel);
+      if (!allCalls.length) showError("No calls found. Try a wider date range.");
+      if (selectedUser) {
+        const filtered = allCalls.filter(c => String(c.user?.id) === String(selectedUser));
+        setCalls(filtered);
+        const sel = {}; filtered.forEach(c => sel[c.id] = true);
+        setSelectedCalls(sel);
+      } else {
+        const sel = {}; allCalls.forEach(c => sel[c.id] = true);
+        setSelectedCalls(sel);
+      }
     } catch (e) { showError("Failed to fetch calls: " + e.message); }
     setLoadingCalls(false);
   }
@@ -239,9 +238,9 @@ export default function App() {
 
     try {
       let allMatched = [];
-      let url = `/api/customer?per_page=50&from=${from}&to=${to}`;
       let totalScanned = 0;
       let totalKnown = 0;
+      let url = `/api/customer?per_page=50&from=${from}&to=${to}`;
 
       while (url) {
         const r = await fetch(url);
@@ -252,25 +251,19 @@ export default function App() {
 
         for (const c of calls) {
           const rawDigits = (c.raw_digits || "").replace(/\D/g, "");
-          if (
-            rawDigits === cleanSearch ||
-            rawDigits.endsWith(last9) ||
-            cleanSearch.endsWith(rawDigits.slice(-9))
-          ) {
+          if (rawDigits === cleanSearch || rawDigits.endsWith(last9) || cleanSearch.endsWith(rawDigits.slice(-9))) {
             allMatched.push(c);
           }
         }
 
-        // Progress: use meta total if available, otherwise estimate from time range
         if (d.meta?.total) totalKnown = d.meta.total;
         if (totalKnown) {
           setCustomerProgress(Math.min(95, Math.round((totalScanned / totalKnown) * 100)));
         } else {
-          // fallback: estimate by oldest timestamp
           const oldest = calls[calls.length - 1]?.started_at;
           if (oldest) {
-            const totalRange = Math.floor(Date.now() / 1000) - from;
-            const scanned = Math.floor(Date.now() / 1000) - oldest;
+            const totalRange = to - from;
+            const scanned = to - oldest;
             setCustomerProgress(p => Math.max(p, Math.min(95, Math.round((scanned / totalRange) * 100))));
           }
         }
@@ -286,10 +279,8 @@ export default function App() {
       }
 
       setCustomerProgress(100);
-      if (!allMatched.length) setCustomerError("No calls found for this number in the last 6 months.");
-    } catch (e) {
-      setCustomerError("Failed to fetch: " + e.message);
-    }
+      if (!allMatched.length) setCustomerError("No calls found for this number in the selected date range.");
+    } catch (e) { setCustomerError("Failed to fetch: " + e.message); }
     setCustomerLoading(false);
   }
 
@@ -317,7 +308,7 @@ export default function App() {
       const transcript = customerTranscripts[c.id] || "No transcript";
       return `==============================\nDate: ${date}\nCustomer: ${customerPhone}\nAgent: ${agent}\nDuration: ${dur}\nDirection: ${c.direction || "—"}\n------------------------------\n${transcript}\n`;
     }).join("\n");
-    const blob = new Blob([`Customer Phone: ${customerPhone}\nTotal Calls: ${customerCalls.length}\nExported: ${new Date().toLocaleString("en-IN")}\n${"═".repeat(60)}\n\n${lines}`], { type: "text/plain" });
+    const blob = new Blob([`Customer Phone: ${customerPhone}\nDate Range: ${customerDateFrom} to ${customerDateTo}\nTotal Calls: ${customerCalls.length}\nExported: ${new Date().toLocaleString("en-IN")}\n${"═".repeat(60)}\n\n${lines}`], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = `customer-${customerPhone.replace(/\D/g, "")}.txt`;
@@ -328,7 +319,7 @@ export default function App() {
   const transcriptCount = Object.keys(transcripts).length;
   const noTranscriptCount = Object.values(transcripts).filter(t => t.includes("[No transcript")).length;
 
-  // ── LOGIN SCREEN ──
+  // LOGIN
   if (!loggedIn) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f5f7fa", fontFamily: "system-ui,sans-serif" }}>
@@ -340,41 +331,23 @@ export default function App() {
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Username</label>
-            <input
-              value={loginUser}
-              onChange={e => setLoginUser(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleLogin()}
-              placeholder="Username"
-              autoComplete="username"
-              style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
-            />
+            <input value={loginUser} onChange={e => setLoginUser(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Username" style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }} />
           </div>
           <div style={{ marginBottom: 20 }}>
             <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Password</label>
-            <input
-              type="password"
-              value={loginPass}
-              onChange={e => setLoginPass(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleLogin()}
-              placeholder="Password"
-              autoComplete="current-password"
-              style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
-            />
+            <input type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Password" style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }} />
           </div>
           {loginError && <div style={{ background: "#FCEBEB", border: "1px solid #E24B4A", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#A32D2D", marginBottom: 14 }}>{loginError}</div>}
-          <button onClick={handleLogin} style={{ width: "100%", padding: "10px", background: "#185FA5", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
-            Sign in
-          </button>
+          <button onClick={handleLogin} style={{ width: "100%", padding: 10, background: "#185FA5", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>Sign in</button>
         </div>
       </div>
     );
   }
 
-  // ── MAIN APP ──
+  // MAIN APP
   return (
     <div style={{ padding: "1.5rem 1rem", maxWidth: 720, margin: "0 auto", fontFamily: "system-ui,sans-serif", color: "#111" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>Aircall Transcripts</h2>
           <p style={{ fontSize: 13, color: "#666", margin: "4px 0 0" }}>Welcome, {USERNAME}</p>
@@ -387,19 +360,16 @@ export default function App() {
         </div>
       </div>
 
-      {/* User loading progress */}
-      {usersLoading && <ProgressBar value={usersProgress} label="Loading agent list…" />}
+      {usersLoading && <ProgressBar value={50} label="Loading agent list…" />}
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, margin: "16px 0 20px", borderBottom: "1px solid #e5e5e5" }}>
         {TABS.map(t => (
-          <button key={t} onClick={() => setActiveTab(t)} style={{ padding: "8px 14px", fontSize: 12, fontWeight: 500, cursor: "pointer", background: "none", border: "none", borderBottom: activeTab === t ? "2px solid #185FA5" : "2px solid transparent", color: activeTab === t ? "#185FA5" : "#666", marginBottom: -1 }}>
-            {t}
-          </button>
+          <button key={t} onClick={() => setActiveTab(t)} style={{ padding: "8px 14px", fontSize: 12, fontWeight: 500, cursor: "pointer", background: "none", border: "none", borderBottom: activeTab === t ? "2px solid #185FA5" : "2px solid transparent", color: activeTab === t ? "#185FA5" : "#666", marginBottom: -1 }}>{t}</button>
         ))}
       </div>
 
-      {/* ── TAB 1: All Calls for Specific Duration ── */}
+      {/* ── TAB 1: Duration ── */}
       {activeTab === TABS[0] && (
         <>
           {error && <div style={{ background: "#FCEBEB", border: "1px solid #E24B4A", borderRadius: 8, padding: "8px 14px", marginBottom: 16, fontSize: 12, color: "#A32D2D" }}>{error}</div>}
@@ -432,12 +402,11 @@ export default function App() {
                   <option value="">All agents</option>
                   {users.map(u => <option key={u.id} value={u.id}>{u.name}{u.email ? ` (${u.email})` : ""}</option>)}
                 </select>
-                {usersLoading && <p style={{ fontSize: 11, color: "#aaa", margin: "4px 0 0" }}>Loading agents…</p>}
               </div>
               <Btn onClick={async () => { await fetchCalls(); setStep(1); }} disabled={loadingCalls}>
                 {loadingCalls ? "Fetching all calls…" : "Fetch calls →"}
               </Btn>
-              {loadingCalls && <ProgressBar value={callsProgress} label={`Fetching all calls… (${calls.length} fetched, filtering by agent after)`} />}
+              {loadingCalls && <ProgressBar value={callsProgress} label={`Fetching calls… (${calls.length} fetched, filtering by agent after)`} />}
             </Card>
           )}
 
@@ -510,7 +479,7 @@ export default function App() {
         </>
       )}
 
-      {/* ── TAB 2: All Calls for Specific Number ── */}
+      {/* ── TAB 2: Specific Number ── */}
       {activeTab === TABS[1] && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Card>
@@ -529,11 +498,7 @@ export default function App() {
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <input
                 value={customerPhone}
-                onChange={e => {
-                  const val = e.target.value;
-                  if (!val.startsWith("+61")) setCustomerPhone("+61");
-                  else setCustomerPhone(val);
-                }}
+                onChange={e => { const v = e.target.value; setCustomerPhone(v.startsWith("+61") ? v : "+61"); }}
                 onKeyDown={e => e.key === "Enter" && fetchCustomerCalls()}
                 placeholder="+61 4XX XXX XXX"
                 style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
@@ -566,7 +531,7 @@ export default function App() {
               {customerDownloading && <ProgressBar value={customerDownloadProgress} label="Fetching transcripts…" />}
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                 {customerCalls.length === 0 && customerLoading && (
-                  <p style={{ fontSize: 13, color: "#666" }}>Scanning… results will appear here as they're found.</p>
+                  <p style={{ fontSize: 13, color: "#666" }}>Scanning… results will appear as they're found.</p>
                 )}
                 {customerCalls.map(c => {
                   const agent = c.user?.name || "Unknown";
