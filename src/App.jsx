@@ -99,8 +99,8 @@ export default function App() {
 
   // Customer tab
   const [customerPhone, setCustomerPhone] = useState("+61");
-  const [customerDateFrom, setCustomerDateFrom] = useState(oneMonthAgo);
-  const [customerDateTo, setCustomerDateTo] = useState(today);
+  const [customerDateFrom, setCustomerDateFrom] = useState(oneMonthAgo());
+  const [customerDateTo, setCustomerDateTo] = useState(today());
   const [customerCalls, setCustomerCalls] = useState([]);
   const [customerTranscripts, setCustomerTranscripts] = useState({});
   const [customerLoading, setCustomerLoading] = useState(false);
@@ -331,11 +331,11 @@ export default function App() {
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Username</label>
-            <input value={loginUser} onChange={e => setLoginUser(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Username" style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }} />
+            <input value={loginUser} onChange={e => setLoginUser(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Username" name="username" autoComplete="username" style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }} />
           </div>
           <div style={{ marginBottom: 20 }}>
             <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Password</label>
-            <input type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Password" style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }} />
+            <input type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Password" name="password" autoComplete="current-password" style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }} />
           </div>
           {loginError && <div style={{ background: "#FCEBEB", border: "1px solid #E24B4A", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#A32D2D", marginBottom: 14 }}>{loginError}</div>}
           <button onClick={handleLogin} style={{ width: "100%", padding: 10, background: "#185FA5", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>Sign in</button>
